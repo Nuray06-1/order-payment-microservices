@@ -1,4 +1,4 @@
-# 🌟 README — VERSION PRO
+# 🌟 README
 
 ```markdown
 # 🚀 Order & Payment Microservices System (Go)
