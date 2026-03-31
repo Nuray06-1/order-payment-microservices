@@ -1,1 +1,1 @@
-echo "postgres.tar" >> .gitignore
+postgres.tar
