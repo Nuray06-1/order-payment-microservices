@@ -13,6 +13,7 @@ type OrderRepository interface {
 	Create(order *domain.Order) error
 	Update(order *domain.Order) error
 	GetByID(id string) (*domain.Order, error)
+	GetByIdempotencyKey(key string) (*domain.Order, error)
 }
 
 type PaymentClient interface {
@@ -28,21 +29,27 @@ func NewOrderUseCase(r OrderRepository, p PaymentClient) *OrderUseCase {
 	return &OrderUseCase{repo: r, payment: p}
 }
 
-func (uc *OrderUseCase) CreateOrder(customerID, itemName string, amount int64) (*domain.Order, error) {
+func (uc *OrderUseCase) CreateOrder(customerID, itemName string, amount int64, key string) (*domain.Order, error) {
+	existing, err := uc.repo.GetByIdempotencyKey(key)
+	if err == nil && existing.ID != "" {
+		return existing, nil
+	}
+
 	if amount <= 0 {
 		return nil, errors.New("amount must be greater than 0")
 	}
 
 	order := &domain.Order{
-		ID:         uuid.New().String(),
-		CustomerID: customerID,
-		ItemName:   itemName,
-		Amount:     amount,
-		Status:     "Pending",
-		CreatedAt:  time.Now(),
+		ID:             uuid.New().String(),
+		CustomerID:     customerID,
+		ItemName:       itemName,
+		Amount:         amount,
+		Status:         "Pending",
+		CreatedAt:      time.Now(),
+		IdempotencyKey: key,
 	}
 
-	err := uc.repo.Create(order)
+	err = uc.repo.Create(order)
 	if err != nil {
 		return nil, err
 	}

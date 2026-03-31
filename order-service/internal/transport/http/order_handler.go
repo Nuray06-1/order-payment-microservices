@@ -30,10 +30,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	key := c.GetHeader("Idempotency-Key")
+
 	order, err := h.usecase.CreateOrder(
 		req.CustomerID,
 		req.ItemName,
 		req.Amount,
+		key,
 	)
 
 	if err != nil {

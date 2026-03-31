@@ -40,3 +40,13 @@ func (r *PostgresOrderRepo) GetByID(id string) (*domain.Order, error) {
 	err := row.Scan(&o.ID, &o.CustomerID, &o.ItemName, &o.Amount, &o.Status, &o.CreatedAt)
 	return &o, err
 }
+func (r *PostgresOrderRepo) GetByIdempotencyKey(key string) (*domain.Order, error) {
+	row := r.db.QueryRow(`
+		SELECT id, customer_id, item_name, amount, status, created_at
+		FROM orders WHERE idempotency_key=$1
+	`, key)
+
+	var o domain.Order
+	err := row.Scan(&o.ID, &o.CustomerID, &o.ItemName, &o.Amount, &o.Status, &o.CreatedAt)
+	return &o, err
+}
