@@ -74,6 +74,67 @@ graph TD
 | **GET** | `/payments/{order_id}`| - | [cite_start]Returns status for a specific order [cite: 91] |
 
 ---
+🚀 API Testing Guide (Manual Verification)
+To verify the system, ensure both services and their databases are running. You can use the following curl commands in your terminal:
+
+1. Order Service (Port :8081)
+A. Create a Successful Order
+Creates an order and triggers a successful payment in the Payment Service (Amount < 100,000).
+
+Bash
+curl -X POST http://localhost:8081/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "nuray_nuraly",
+    "item_name": "MacBook Air",
+    "amount": 95000
+  }'
+B. Create a Failed Order (Limit Exceeded)
+Tests business logic: the Payment Service should decline amounts over 100,000.
+
+Bash
+curl -X POST http://localhost:8081/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "nuray_nuraly",
+    "item_name": "High-End Server",
+    "amount": 250000
+  }'
+C. Get Order Details
+Fetch a specific order from the database using its UUID.
+
+Bash
+# Replace {ID} with the ID from the previous response
+curl -X GET http://localhost:8081/orders/{ID}
+D. Cancel an Order
+Tests the PATCH method for partial updates.
+
+Bash
+curl -X PATCH http://localhost:8081/orders/{ID}/cancel
+2. Payment Service (Port :8083)
+A. Direct Payment Verification
+Verifies that the Payment Service can operate independently as a standalone module.
+
+Bash
+curl -X POST http://localhost:8083/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": "manual_test_001",
+    "amount": 5000
+  }'
+B. Get Payment History
+Retrieve all transactions associated with a specific customer ID.
+
+Bash
+curl -X GET http://localhost:8083/payments/nuray_nuraly
+🛠 Troubleshooting (Common Issues)
+Connection Refused: Ensure the Go services are running (go run main.go).
+
+404 Not Found: Check if any background Nginx containers are occupying port 8080 or 8081.
+
+Database Error: Ensure Docker containers are active: docker-compose up -d.
+
+---
 
 ## 🌟 Bonus Features
 * [cite_start]**Idempotency:** Implementation of `Idempotency-Key` header to prevent duplicate orders/payments[cite: 123].
