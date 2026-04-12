@@ -1,34 +1,56 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"time"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-
-	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 
 	"payment-service/internal/repository"
-	"payment-service/internal/transport/http"
+	transport "payment-service/internal/transport/grpc"
 	"payment-service/internal/usecase"
+
+	pb "payment-service/pkg/payment"
 )
 
 func main() {
-	r := gin.Default()
+	godotenv.Load()
 
-	db, err := sql.Open("postgres", "postgres://postgres:password@localhost:5435/paymentdb?sslmode=disable")
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to connect to db: %v", err)
 	}
 
 	repo := repository.NewPostgresPaymentRepo(db)
-
 	uc := usecase.NewPaymentUseCase(repo)
+	handler := transport.NewPaymentGRPCHandler(uc)
 
-	handler := http.NewPaymentHandler(uc)
+	loggingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		start := time.Now()
+		resp, err := handler(ctx, req)
+		log.Printf("Method: %s, Duration: %s, Error: %v", info.FullMethod, time.Since(start), err)
+		return resp, err
+	}
 
-	r.GET("/payments/:order_id", handler.GetPayment)
+	lis, err := net.Listen("tcp", ":"+os.Getenv("PORT"))
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
 
-	r.POST("/payments", handler.CreatePayment)
+	s := grpc.NewServer(grpc.UnaryInterceptor(loggingInterceptor))
+	pb.RegisterPaymentServiceServer(s, handler)
 
-	r.Run(":8083")
+	log.Printf("Payment gRPC Server started on port %s", os.Getenv("PORT"))
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }

@@ -1,163 +1,88 @@
-# 🚀 Order & Payment Microservices System (Go)
+```markdown
+# Order & Payment System (gRPC Migration) — Assignment 2
 
-## 🏗️ Architecture & Bounded Contexts
-[cite_start]This project implements a distributed system using **Clean Architecture** to ensure high maintainability and testability[cite: 15, 17].
+## Project Overview
+This project demonstrates the migration of inter-service communication from REST to **gRPC** using a **Contract-First** approach. The system consists of two microservices: `Order Service` and `Payment Service`.
 
+## 🔗 Repository Links (Contract-First)
+According to the assignment requirements, the Protocol Buffers and generated code are managed separately:
+* **Repository A (Protos):** [https://github.com/Nuray06-1/proto-api.git]
+* **Repository B (Generated Code):** [https://github.com/Nuray06-1/gen-api.git]
+
+## 🏗 Architecture
+The system follows **Clean Architecture** principles. Communication between the user and the Order Service is handled via **REST (Gin)**, while internal communication between Order and Payment services is strictly **gRPC**.
+
+The project follows the Contract-First principle. Protocol Buffers are managed separately. Due to local environment constraints on macOS (M1/M2 chips) and CI/CD sync issues, the generated code was integrated locally, but the separation of concerns is strictly maintained.
+
+### Architecture Diagram
 ```mermaid
 graph TD
-    subgraph "Order Service (Bounded Context)"
-        A[HTTP Handler /orders] --> B[Order UseCase]
-        B --> C[Order Repository]
-        B --> D[Payment HTTP Client]
-        C --> E[(Postgres: orderdb)]
-    end
-
-    subgraph "Payment Service (Bounded Context)"
-        F[HTTP Handler /payments] --> G[Payment UseCase]
-        G --> H[Payment Repository]
-        H --> I[(Postgres: paymentdb)]
-    end
-
-    D -- "REST (Timeout: 2s)" --> F
+    User([User/Client]) 
     
-    style E fill:#4285F4,stroke:#333,color:#fff
-    style I fill:#34A853,stroke:#333,color:#fff
+    subgraph "Order Service Layer"
+        OrderService[Order Service]
+        OrderDB[(PostgreSQL)]
+    end
+
+    subgraph "Payment Service Layer"
+        PaymentService[Payment Service]
+        PaymentDB[(PostgreSQL)]
+    end
+
+    User -- "REST (Postman/Curl)" --> OrderService
+    OrderService -- "gRPC (Unary Call)" --> PaymentService
+    OrderService -- "gRPC Stream (Status Updates)" --> User
+    
+    OrderService <--> OrderDB
+    PaymentService <--> PaymentDB
 ```
 
-### 🧩 Architecture Decisions
-* [cite_start]**Separation of Concerns:** Each service is strictly layered into Domain, UseCase, Repository, and Transport[cite: 28, 41].
-* [cite_start]**Dependency Inversion:** Use cases depend on interfaces (Ports), not implementations[cite: 35].
-* [cite_start]**Manual DI:** All dependencies are wired in `main.go` (Composition Root) for full control[cite: 40].
-* **Data Isolation:** Strictly **No Shared Database**. [cite_start]Each service has its own schema[cite: 37, 109].
-* [cite_start]**No Shared Code:** Domain models are independent; we do not use "common" or "shared" packages[cite: 38, 117].
+## 🚀 Key Features Implemented
+1.  **gRPC Unary Call:** Order Service calls Payment Service to process payments.
+2.  **Server-side Streaming:** Users can subscribe to order status updates in real-time. The stream is tied to actual database changes.
+3.  **gRPC Interceptor (Bonus +10%):** A custom middleware in the Payment Service logs every incoming request, including the **method name** and **execution duration**.
+4.  **Environment Configuration:** No hardcoded addresses. All connections (DB, Ports, Service URLs) are managed via `.env` files.
+5.  **Clean Architecture:** Use Cases remain independent of the transport layer (gRPC/REST).
 
----
+## 🛠 Setup & Installation
 
-## ⚙️ Core Business Rules
+### Prerequisites
+* Docker & Docker Compose
+* Go 1.21+
 
-### 💰 Financial Accuracy
-* [cite_start]All monetary values use `int64` (cents/tiyn) to avoid floating-point precision issues[cite: 63, 93].
+### Running the System
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/Nuray06-1/order-payment-microservices.git]
+    cd AP2_Assignment2_Nuray_Nuraly
+    ```
+2.  **Configure Environment:**
+    Rename `.env.example` to `.env` in both `order-service` and `payment-service` folders and fill in your database credentials.
+3.  **Start Infrastructure:**
+    ```bash
+    docker-compose up -d
+    ```
+4.  **Run Services:**
+    ```bash
+    # In terminal 1 (Payment Service)
+    go run payment-service/cmd/service/main.go
 
-### 💳 Payment Logic
-* [cite_start]**Limit:** Any amount exceeding **100,000** (1000 units) is automatically **Declined**[cite: 99].
-* [cite_start]**Response:** Authorized payments return a unique `transaction_id`[cite: 90].
+    # In terminal 2 (Order Service)
+    go run order-service/cmd/service/main.go
+    ```
 
-### 🛒 Order Lifecycle
-* [cite_start]**Amount:** Must be **> 0**[cite: 95].
-* [cite_start]**Invariants:** Once an order is marked as **"Paid"**, it cannot be **"Cancelled"**[cite: 86, 96].
-
----
-
-## ⚠️ Failure Handling (Resilience)
-[cite_start]Following the assignment requirements for robust inter-service communication[cite: 102]:
-
-1.  [cite_start]**Custom HTTP Client:** The Order Service uses a client with a strict **2-second timeout**[cite: 101].
-2.  **Service Unavailability:** If the Payment Service is down or slow:
-    * [cite_start]The Order Service returns `503 Service Unavailable`[cite: 105].
-    * [cite_start]The Order status remains `Pending` or is marked `Failed` to prevent hanging[cite: 106].
-
----
-
-## 📌 API Endpoints
-
-### 🛒 Order Service (`:8080`)
-| Method | Endpoint | Payload | Logic |
-|------|--------|--------|-------|
-| **POST** | `/orders` | `{"customer_id": "str", ...}` | [cite_start]Creates order & calls Payment Service [cite: 75, 81] |
-| **GET** | `/orders/{id}` | - | [cite_start]Retrieves details from DB [cite: 84] |
-| **PATCH** | `/orders/{id}/cancel`| - | [cite_start]Cancels "Pending" orders only [cite: 85] |
-
-### 💳 Payment Service (`:8081`)
-| Method | Endpoint | Payload | Logic |
-|------|--------|--------|-------|
-| **POST** | `/payments` | `{"order_id": "str", ...}` | [cite_start]Authorizes and stores transaction [cite: 88, 90] |
-| **GET** | `/payments/{order_id}`| - | [cite_start]Returns status for a specific order [cite: 91] |
-
----
-
-## 🚀 API Testing Guide (Manual Verification)
-
-To verify the system, ensure both services and their databases are running. You can use the following `curl` commands in your terminal:
-
-### 1. Order Service (Port :8081)
-
-**A. Create a Successful Order**
-Creates an order and triggers a successful payment in the Payment Service (Amount < 100,000).
+## 🧪 Testing gRPC Streaming
+To test the server-side stream, use `grpcurl`:
 ```bash
-curl -X POST http://localhost:8081/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customer_id": "nuray_nuraly",
-    "item_name": "MacBook Air",
-    "amount": 95000
-  }'
+grpcurl -plaintext -d '{"order_id": "YOUR_ORDER_ID"}' localhost:50052 order.OrderService/SubscribeToOrderUpdates
 ```
 
-**B. Create a Failed Order (Limit Exceeded)**
-Tests business logic: the Payment Service should decline amounts over 100,000.
-```bash
-curl -X POST http://localhost:8081/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customer_id": "nuray_nuraly",
-    "item_name": "High-End Server",
-    "amount": 250000
-  }'
-```
-
-**C. Get Order Details**
-Fetch a specific order from the database using its UUID.
-```bash
-# Replace {ID} with the ID from the previous response
-curl -X GET http://localhost:8081/orders/{ID}
-```
-
-**D. Cancel an Order**
-Tests the `PATCH` method for partial updates.
-```bash
-curl -X PATCH http://localhost:8081/orders/{ID}/cancel
-```
+## 📂 Project Structure
+* `internal/transport/grpc`: gRPC Handlers and Interceptors.
+* `internal/usecase`: Core business logic (unchanged from Assignment 1).
+* `internal/repository`: Database interactions.
+* `pkg/`: Local generated gRPC code (Note: Integrated locally for compatibility, following the proto contract).
 
 ---
-
-### 2. Payment Service (Port :8083)
-
-**A. Direct Payment Verification**
-Verifies that the Payment Service can operate independently as a standalone module.
-```bash
-curl -X POST http://localhost:8083/payments \
-  -H "Content-Type: application/json" \
-  -d '{
-    "order_id": "manual_test_001",
-    "amount": 5000
-  }'
+*Developed by Nuray Nuraly (SE-2416)*
 ```
-
-**B. Get Payment History**
-Retrieve all transactions associated with a specific customer ID.
-```bash
-curl -X GET http://localhost:8083/payments/nuray_nuraly
-```
-
----
-
-### 🛠 Troubleshooting (Common Issues)
-
-* **Connection Refused:** Ensure the Go services are running (`go run main.go`).
-* **404 Not Found:** Check if any background Nginx containers are occupying port 8080 or 8081.
-* **Database Error:** Ensure Docker containers are active: `docker-compose up -d`.
-
----
-
-## 🌟 Bonus Features
-* [cite_start]**Idempotency:** Implementation of `Idempotency-Key` header to prevent duplicate orders/payments[cite: 123].
-* **UUIDs:** Used for all primary keys to ensure unique identification across services.
-
----
-
-## 🛠️ Setup & Deliverables
-1.  [cite_start]**Migrations:** SQL scripts for both databases are in `/migrations`[cite: 53, 127].
-2.  **Build:** Run `go run cmd/order/main.go` and `go run cmd/payment/main.go`.
-3.  [cite_start]**Submission:** Source code, Diagram, and README provided as per criteria[cite: 124, 128].
-
----

@@ -1,1 +1,3 @@
 postgres.tar
+order-service/.env
+payment-service/.env

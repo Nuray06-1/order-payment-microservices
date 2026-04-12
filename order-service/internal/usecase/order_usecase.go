@@ -1,12 +1,15 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"order-service/internal/domain"
+	payment "order-service/pkg/payment"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 )
 
 type OrderRepository interface {
@@ -15,9 +18,8 @@ type OrderRepository interface {
 	GetByID(id string) (*domain.Order, error)
 	GetByIdempotencyKey(key string) (*domain.Order, error)
 }
-
 type PaymentClient interface {
-	ProcessPayment(orderID string, amount int64) (string, error)
+	ProcessPayment(ctx context.Context, in *payment.PaymentRequest, opts ...grpc.CallOption) (*payment.PaymentResponse, error)
 }
 
 type OrderUseCase struct {
@@ -53,27 +55,35 @@ func (uc *OrderUseCase) CreateOrder(customerID, itemName string, amount int64, k
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	status, err := uc.payment.ProcessPayment(order.ID, order.Amount)
+	payResp, err := uc.payment.ProcessPayment(ctx, &payment.PaymentRequest{
+		OrderId: order.ID,
+		Amount:  float64(order.Amount),
+	})
+
 	if err != nil {
 		order.Status = "Failed"
-		uc.repo.Update(order)
+		_ = uc.repo.Update(order)
 		return order, err
 	}
 
-	if status == "Authorized" {
+	if payResp.Status == "Authorized" || payResp.Status == "Success" {
 		order.Status = "Paid"
 	} else {
 		order.Status = "Failed"
 	}
 
-	uc.repo.Update(order)
+	_ = uc.repo.Update(order)
 
 	return order, nil
 }
+
 func (uc *OrderUseCase) GetOrder(id string) (*domain.Order, error) {
 	return uc.repo.GetByID(id)
 }
+
 func (uc *OrderUseCase) CancelOrder(id string) error {
 	order, err := uc.repo.GetByID(id)
 	if err != nil {
