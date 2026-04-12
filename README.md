@@ -1,4 +1,3 @@
-```markdown
 # Order & Payment System (gRPC Migration) — Assignment 2
 
 ## Project Overview
@@ -85,4 +84,3 @@ grpcurl -plaintext -d '{"order_id": "YOUR_ORDER_ID"}' localhost:50052 order.Orde
 
 ---
 *Developed by Nuray Nuraly (SE-2416)*
-```
