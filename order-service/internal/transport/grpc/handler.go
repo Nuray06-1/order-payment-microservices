@@ -5,10 +5,10 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"order-service/internal/usecase"
-	pb "order-service/pkg/order"
+
+	pb "github.com/Nuray06-1/proto-generated/order"
 )
 
 type OrderGRPCHandler struct {
@@ -17,32 +17,46 @@ type OrderGRPCHandler struct {
 }
 
 func NewOrderGRPCHandler(ou *usecase.OrderUseCase) *OrderGRPCHandler {
-	return &OrderGRPCHandler{
-		orderUseCase: ou,
-	}
+	return &OrderGRPCHandler{orderUseCase: ou}
 }
 
-func (h *OrderGRPCHandler) SubscribeToOrderUpdates(req *pb.OrderRequest, stream pb.OrderService_SubscribeToOrderUpdatesServer) error {
+func (h *OrderGRPCHandler) SubscribeToOrderUpdates(
+	req *pb.OrderRequest,
+	stream pb.OrderService_SubscribeToOrderUpdatesServer,
+) error {
+
 	lastStatus := ""
 
 	for {
-		order, err := h.orderUseCase.GetOrder(req.OrderId)
-		if err != nil {
-			return status.Errorf(codes.NotFound, "order not found: %v", err)
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
 		}
+
+		order, err := h.orderUseCase.GetOrder(stream.Context(), req.OrderId)
+		if err != nil {
+			return status.Errorf(codes.Internal, "failed to get order: %v", err)
+		}
+		if order == nil {
+			return status.Error(codes.NotFound, "order not found")
+		}
+
 		if order.Status != lastStatus {
 			err := stream.Send(&pb.OrderStatusUpdate{
 				Status:    order.Status,
-				UpdatedAt: timestamppb.Now(),
+				UpdatedAt: time.Now().Format(time.RFC3339),
 			})
 			if err != nil {
-				return status.Errorf(codes.Internal, "failed to send stream update: %v", err)
+				return status.Errorf(codes.Internal, "failed to send update: %v", err)
 			}
 			lastStatus = order.Status
 		}
-		if order.Status == "Paid" || order.Status == "Cancelled" {
+
+		if order.Status == "PAID" || order.Status == "CANCELLED" {
 			return nil
 		}
+
 		time.Sleep(2 * time.Second)
 	}
 }

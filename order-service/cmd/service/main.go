@@ -19,8 +19,9 @@ import (
 	"order-service/internal/usecase"
 
 	grpcHandler "order-service/internal/transport/grpc"
-	pb "order-service/pkg/order"
-	payment "order-service/pkg/payment"
+
+	pb "github.com/Nuray06-1/proto-generated/order"
+	payment "github.com/Nuray06-1/proto-generated/payment"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func main() {
 		pb.RegisterOrderServiceServer(grpcServer, orderGRPCHandler)
 		reflection.Register(grpcServer)
 
-		log.Println("Order gRPC Streaming Server is REALY running on :50052")
+		log.Printf("Order gRPC Streaming Server is running on port: %s", grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("failed to serve gRPC: %v", err)
 		}

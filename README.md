@@ -5,13 +5,12 @@ This project demonstrates the migration of inter-service communication from REST
 
 ## 🔗 Repository Links (Contract-First)
 According to the assignment requirements, the Protocol Buffers and generated code are managed separately:
-* **Repository A (Protos):** [https://github.com/Nuray06-1/proto-api.git]
-* **Repository B (Generated Code):** [https://github.com/Nuray06-1/gen-api.git]
+* **Repository A (Protos):** [https://github.com/Nuray06-1/proto-contracts.git]
+* **Repository B (Generated Code):** [https://github.com/Nuray06-1/proto-generated.git]
 
 ## 🏗 Architecture
 The system follows **Clean Architecture** principles. Communication between the user and the Order Service is handled via **REST (Gin)**, while internal communication between Order and Payment services is strictly **gRPC**.
 
-The project follows the Contract-First principle. Protocol Buffers are managed separately. Due to local environment constraints on macOS (M1/M2 chips) and CI/CD sync issues, the generated code was integrated locally, but the separation of concerns is strictly maintained.
 
 ### Architecture Diagram
 ```mermaid
@@ -80,7 +79,6 @@ grpcurl -plaintext -d '{"order_id": "YOUR_ORDER_ID"}' localhost:50052 order.Orde
 * `internal/transport/grpc`: gRPC Handlers and Interceptors.
 * `internal/usecase`: Core business logic (unchanged from Assignment 1).
 * `internal/repository`: Database interactions.
-* `pkg/`: Local generated gRPC code (Note: Integrated locally for compatibility, following the proto contract).
 
 ---
 *Developed by Nuray Nuraly (SE-2416)*

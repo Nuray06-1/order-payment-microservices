@@ -17,7 +17,7 @@ import (
 	transport "payment-service/internal/transport/grpc"
 	"payment-service/internal/usecase"
 
-	pb "payment-service/pkg/payment"
+	pb "github.com/Nuray06-1/proto-generated/payment"
 )
 
 func main() {

@@ -3,7 +3,6 @@ module payment-service
 go 1.25.5
 
 require (
-	github.com/Nuray06-1/gen-api v0.0.0-20260412095259-33d0ba4e57ee
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -12,6 +11,7 @@ require (
 )
 
 require (
+	github.com/Nuray06-1/proto-generated v0.0.0-20260420141126-6e254c0d2ece
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect

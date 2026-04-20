@@ -17,9 +17,9 @@ func NewOrderHandler(uc *usecase.OrderUseCase) *OrderHandler {
 }
 
 type createOrderRequest struct {
-	CustomerID string `json:"customer_id"`
-	ItemName   string `json:"item_name"`
-	Amount     int64  `json:"amount"`
+	CustomerID string `json:"customer_id" binding:"required"`
+	ItemName   string `json:"item_name" binding:"required"`
+	Amount     int64  `json:"amount" binding:"required,gt=0"`
 }
 
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
@@ -31,8 +31,13 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	key := c.GetHeader("Idempotency-Key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key required"})
+		return
+	}
 
 	order, err := h.usecase.CreateOrder(
+		c.Request.Context(),
 		req.CustomerID,
 		req.ItemName,
 		req.Amount,
@@ -40,35 +45,39 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	)
 
 	if err != nil {
-		status := "Failed"
+		status := "FAILED"
 		if order != nil {
 			status = order.Status
 		}
 
-		c.JSON(http.StatusServiceUnavailable, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"status": status,
 			"error":  err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, order)
+	c.JSON(http.StatusCreated, order)
 }
 func (h *OrderHandler) GetOrder(c *gin.Context) {
 	id := c.Param("id")
 
-	order, err := h.usecase.GetOrder(id)
+	order, err := h.usecase.GetOrder(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(404, gin.H{"error": "order not found"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
 	}
 
-	c.JSON(200, order)
+	c.JSON(http.StatusOK, order)
 }
 func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	id := c.Param("id")
 
-	err := h.usecase.CancelOrder(id)
+	err := h.usecase.CancelOrder(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
