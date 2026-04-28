@@ -10,6 +10,8 @@ require (
 	google.golang.org/grpc v1.80.0
 )
 
+require github.com/rabbitmq/amqp091-go v1.11.0 // indirect
+
 require (
 	github.com/Nuray06-1/proto-generated v0.0.0-20260420141126-6e254c0d2ece
 	github.com/bytedance/gopkg v0.1.3 // indirect

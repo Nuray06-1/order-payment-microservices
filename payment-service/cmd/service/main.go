@@ -13,6 +13,7 @@ import (
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 
+	"payment-service/internal/infrastructure/rabbitmq"
 	"payment-service/internal/repository"
 	transport "payment-service/internal/transport/grpc"
 	"payment-service/internal/usecase"
@@ -22,22 +23,55 @@ import (
 
 func main() {
 	godotenv.Load()
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_NAME"),
+	)
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
 	}
 
+	var publisher *rabbitmq.Publisher
+
+	for i := 0; i < 10; i++ {
+		publisher, err = rabbitmq.NewPublisher("amqp://guest:guest@rabbitmq:5672/")
+		if err == nil {
+			log.Println("Connected to RabbitMQ")
+			break
+		}
+
+		log.Println("Waiting for RabbitMQ...", err)
+		time.Sleep(3 * time.Second)
+	}
+
+	if publisher == nil {
+		log.Fatal("Could not connect to RabbitMQ after retries")
+	}
+
 	repo := repository.NewPostgresPaymentRepo(db)
-	uc := usecase.NewPaymentUseCase(repo)
+	uc := usecase.NewPaymentUseCase(repo, publisher)
 	handler := transport.NewPaymentGRPCHandler(uc)
 
-	loggingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	loggingInterceptor := func(
+		ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+
 		start := time.Now()
 		resp, err := handler(ctx, req)
-		log.Printf("Method: %s, Duration: %s, Error: %v", info.FullMethod, time.Since(start), err)
+		log.Printf("Method: %s, Duration: %s, Error: %v",
+			info.FullMethod,
+			time.Since(start),
+			err,
+		)
 		return resp, err
 	}
 
@@ -50,6 +84,7 @@ func main() {
 	pb.RegisterPaymentServiceServer(s, handler)
 
 	log.Printf("Payment gRPC Server started on port %s", os.Getenv("PORT"))
+
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
