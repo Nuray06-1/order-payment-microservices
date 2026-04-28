@@ -38,7 +38,6 @@ Failed messages → Dead Letter Queue (payment.failed)
 
 ---
 
-```md
 ## Architecture Diagram
 
 ```mermaid
