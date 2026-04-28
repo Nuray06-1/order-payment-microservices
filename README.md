@@ -1,6 +1,5 @@
 # README.md
 
-```md
 # Order-Payment Microservices System (Assignment 3)
 
 ## Overview
@@ -14,25 +13,6 @@ The system processes orders, handles payments, and sends notifications asynchron
 ## Architecture
 
 ```
-
-```mermaid
-graph LR
-    Client -->|REST| OrderService
-    OrderService -->|gRPC| PaymentService
-
-    PaymentService --> PaymentDB[(payment-db)]
-    OrderService --> OrderDB[(order-db)]
-
-    PaymentService -->|Publish Event| RabbitMQ
-
-    RabbitMQ -->|Consume| NotificationService
-    RabbitMQ -->|Failed → DLQ| DLQ[payment.failed]
-
-    NotificationService -->|Log Email| Logs
-
-    NotificationService:::consumer
-
-    classDef consumer fill:#f9f,stroke:#333,stroke-width:1px;
 
 Client (curl / API)
 ↓
@@ -57,6 +37,25 @@ Failed messages → Dead Letter Queue (payment.failed)
 ````
 
 ---
+
+## Architecture Diagram
+
+```mermaid
+graph LR
+
+    Client["Client (curl / API)"] -->|REST| OrderService["Order Service (8080)"]
+    OrderService -->|gRPC| PaymentService["Payment Service (50052)"]
+
+    OrderService --> OrderDB[(order-db)]
+    PaymentService --> PaymentDB[(payment-db)]
+
+    PaymentService -->|Publish Event| RabbitMQ["RabbitMQ"]
+
+    RabbitMQ -->|Consume| NotificationService["Notification Service"]
+    RabbitMQ -->|DLQ| DLQ["payment.failed"]
+
+    NotificationService -->|Log Email| Logs["Console Log"]
+
 
 ## Services
 
