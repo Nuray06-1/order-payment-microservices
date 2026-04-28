@@ -12,8 +12,7 @@ The system processes orders, handles payments, and sends notifications asynchron
 
 ## Architecture
 
-```
-
+```text
 Client (curl / API)
 ↓
 Order Service (REST)
@@ -25,16 +24,13 @@ PostgreSQL (payments)
 RabbitMQ (event broker)
 ↓
 Notification Service (Consumer)
-
 ```
 
 Additionally:
 
-```
-
+```text
 Failed messages → Dead Letter Queue (payment.failed)
-
-````
+```
 
 ---
 
@@ -42,7 +38,6 @@ Failed messages → Dead Letter Queue (payment.failed)
 
 ```mermaid
 graph LR
-
     Client["Client (curl / API)"] -->|REST| OrderService["Order Service (8080)"]
     OrderService -->|gRPC| PaymentService["Payment Service (50052)"]
 
@@ -55,7 +50,7 @@ graph LR
     RabbitMQ -->|DLQ| DLQ["payment.failed"]
 
     NotificationService -->|Log Email| Logs["Console Log"]
-
+```
 
 ## Services
 
@@ -109,7 +104,7 @@ graph LR
 
 ```bash
 docker compose up --build
-````
+```
 
 All services will start automatically:
 
@@ -120,7 +115,7 @@ All services will start automatically:
 
 Login:
 
-```
+```text
 guest / guest
 ```
 
@@ -167,7 +162,7 @@ Example:
 
 ## Sample Notification Log
 
-```
+```text
 [Notification] Sent email to test@example.com for Order #abc123. Amount: $5000.00
 ```
 
@@ -200,7 +195,7 @@ Example:
 * Failed messages sent to `payment.failed`
 * Example trigger:
 
-```
+```text
 customer_email = fail@example.com
 ```
 
@@ -213,6 +208,7 @@ customer_email = fail@example.com
 * Processes pending messages before exit
 
 ---
+
 ## Idempotency & ACK Strategy
 
 ### Idempotency
@@ -284,5 +280,3 @@ This project demonstrates:
 
 Nuraly Nuray, SE-2416
 AITU Software Engineering Student
-
-```
