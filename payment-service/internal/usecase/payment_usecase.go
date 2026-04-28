@@ -19,12 +19,20 @@ type PaymentRepository interface {
 	GetByOrderID(ctx context.Context, orderID string) (*domain.Payment, error)
 }
 
-type PaymentUseCase struct {
-	repo PaymentRepository
+type EventPublisher interface {
+	PublishPaymentCompleted(ctx context.Context, payment *domain.Payment) error
 }
 
-func NewPaymentUseCase(r PaymentRepository) *PaymentUseCase {
-	return &PaymentUseCase{repo: r}
+type PaymentUseCase struct {
+	repo      PaymentRepository
+	publisher EventPublisher
+}
+
+func NewPaymentUseCase(r PaymentRepository, p EventPublisher) *PaymentUseCase {
+	return &PaymentUseCase{
+		repo:      r,
+		publisher: p,
+	}
 }
 
 func (uc *PaymentUseCase) Process(
@@ -48,30 +56,32 @@ func (uc *PaymentUseCase) Process(
 		return existing, nil
 	}
 
+	var payment *domain.Payment
+
 	if amount > 100000 {
-		payment := &domain.Payment{
+		payment = &domain.Payment{
 			ID:      uuid.New().String(),
+			EventID: uuid.New().String(),
 			OrderID: orderID,
 			Amount:  amount,
 			Status:  StatusDeclined,
 		}
-
-		if err := uc.repo.Create(ctx, payment); err != nil {
-			return nil, err
+	} else {
+		payment = &domain.Payment{
+			ID:            uuid.New().String(),
+			EventID:       uuid.New().String(),
+			OrderID:       orderID,
+			TransactionID: uuid.New().String(),
+			Amount:        amount,
+			Status:        StatusAuthorized,
 		}
-
-		return payment, nil
-	}
-
-	payment := &domain.Payment{
-		ID:            uuid.New().String(),
-		OrderID:       orderID,
-		TransactionID: uuid.New().String(),
-		Amount:        amount,
-		Status:        StatusAuthorized,
 	}
 
 	if err := uc.repo.Create(ctx, payment); err != nil {
+		return nil, err
+	}
+
+	if err := uc.publisher.PublishPaymentCompleted(ctx, payment); err != nil {
 		return nil, err
 	}
 
