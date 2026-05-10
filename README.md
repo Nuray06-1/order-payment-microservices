@@ -38,19 +38,30 @@ Failed messages → Dead Letter Queue (payment.failed)
 
 ```mermaid
 graph LR
-    Client["Client (curl / API)"] -->|REST| OrderService["Order Service (8080)"]
-    OrderService -->|gRPC| PaymentService["Payment Service (50052)"]
 
-    OrderService --> OrderDB[(order-db)]
-    PaymentService --> PaymentDB[(payment-db)]
+Client --> OrderService
 
-    PaymentService -->|Publish Event| RabbitMQ["RabbitMQ"]
+OrderService --> Redis["Redis Cache + Rate Limiter"]
+OrderService --> OrderDB[(order-db)]
 
-    RabbitMQ -->|Consume| NotificationService["Notification Service"]
-    RabbitMQ -->|DLQ| DLQ["payment.failed"]
+OrderService --> PaymentService
 
-    NotificationService -->|Log Email| Logs["Console Log"]
+PaymentService --> PaymentDB[(payment-db)]
+
+PaymentService --> RabbitMQ
+
+RabbitMQ --> NotificationService
+
+NotificationService --> Redis2["Redis Idempotency"]
+
+NotificationService --> Provider["EmailSender / MockProvider"]
+
+RabbitMQ --> DLQ["payment.failed"]
 ```
+
+Processed event IDs are stored in Redis for 24 hours.
+
+This guarantees idempotency even after container restarts or multiple service replicas.
 
 ## Services
 
@@ -88,6 +99,44 @@ graph LR
 - PostgreSQL (payment-db)
 
 ---
+
+## Cache Invalidation Strategy
+
+The Order Service implements the cache-aside pattern using Redis.
+
+Flow:
+
+1. GET /orders/:id first checks Redis.
+2. If cache exists, the order is returned immediately.
+3. On cache miss, data is loaded from PostgreSQL and cached for 5 minutes.
+
+When an order status changes (PAID, FAILED, CANCELLED), the Redis key is deleted immediately.
+
+This prevents stale data such as returning PENDING for already paid orders.
+
+## Retry Strategy
+
+The Notification Service retries failed provider calls using exponential backoff:
+
+- Retry 1 → 2 seconds
+- Retry 2 → 4 seconds
+- Retry 3 → 8 seconds
+
+If all retries fail, the message is sent to the Dead Letter Queue.
+
+## Bonus: API Rate Limiting
+
+The Order Service uses Redis-based rate limiting.
+
+Each client IP has its own Redis counter.
+
+Policy:
+
+- Maximum 10 requests per minute
+
+If the limit is exceeded, the service returns:
+
+HTTP 429 Too Many Requests
 
 ## Technologies
 
