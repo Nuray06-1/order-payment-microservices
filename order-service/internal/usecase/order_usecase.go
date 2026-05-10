@@ -3,7 +3,10 @@ package usecase
 import (
 	"context"
 	"errors"
+	"encoding/json"
 	"time"
+
+	"order-service/internal/infrastructure/cache"
 
 	"order-service/internal/domain"
 
@@ -34,12 +37,14 @@ type PaymentClient interface {
 type OrderUseCase struct {
 	repo    OrderRepository
 	payment PaymentClient
+	cache   *cache.RedisCache
 }
 
-func NewOrderUseCase(r OrderRepository, p PaymentClient) *OrderUseCase {
+func NewOrderUseCase(r OrderRepository, p PaymentClient, c *cache.RedisCache,) *OrderUseCase {
 	return &OrderUseCase{
 		repo:    r,
 		payment: p,
+		cache:   c,
 	}
 }
 
@@ -108,16 +113,59 @@ func (uc *OrderUseCase) CreateOrder(
 	if err := uc.repo.Update(ctx, order); err != nil {
 		return nil, err
 	}
+	_ = uc.cache.Delete(
+		"order:" + order.ID,
+	)
 
 	return order, nil
 }
 
-func (uc *OrderUseCase) GetOrder(ctx context.Context, id string) (*domain.Order, error) {
+func (uc *OrderUseCase) GetOrder(
+	ctx context.Context,
+	id string,
+) (*domain.Order, error) {
+
 	if id == "" {
 		return nil, errors.New("id required")
 	}
 
-	return uc.repo.GetByID(ctx, id)
+	cacheKey := "order:" + id
+
+	cached, err := uc.cache.Get(cacheKey)
+
+	if err == nil {
+
+		var order domain.Order
+
+		if json.Unmarshal(
+			[]byte(cached),
+			&order,
+		) == nil {
+
+			return &order, nil
+		}
+	}
+
+	order, err := uc.repo.GetByID(
+		ctx,
+		id,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data, _ := json.Marshal(
+		order,
+	)
+
+	_ = uc.cache.Set(
+		cacheKey,
+		string(data),
+		5*time.Minute,
+	)
+
+	return order, nil
 }
 
 func (uc *OrderUseCase) CancelOrder(ctx context.Context, id string) error {
@@ -138,5 +186,17 @@ func (uc *OrderUseCase) CancelOrder(ctx context.Context, id string) error {
 	}
 
 	order.Status = StatusCancelled
-	return uc.repo.Update(ctx, order)
+
+	if err := uc.repo.Update(
+		ctx,
+		order,
+	); err != nil {
+		return err
+	}
+
+	_ = uc.cache.Delete(
+		"order:" + order.ID,
+	)
+
+	return nil
 }

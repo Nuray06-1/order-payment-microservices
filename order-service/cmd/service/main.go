@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"order-service/internal/infrastructure/cache"
+
 	"order-service/internal/repository"
 	"order-service/internal/transport/http"
 	"order-service/internal/usecase"
@@ -41,8 +43,16 @@ func main() {
 	paymentGRPCClient := payment.NewPaymentServiceClient(conn)
 
 	repo := repository.NewPostgresOrderRepo(db)
-	uc := usecase.NewOrderUseCase(repo, paymentGRPCClient)
+	redisCache := cache.NewRedis(
+		os.Getenv("REDIS_ADDR"),
+	)
+	uc := usecase.NewOrderUseCase(repo, paymentGRPCClient, redisCache,)
 	r := gin.Default()
+	r.Use(
+		http.RateLimiter(
+			redisCache.Client,
+		),
+	)
 	handler := http.NewOrderHandler(uc)
 
 	r.GET("/orders/:id", handler.GetOrder)

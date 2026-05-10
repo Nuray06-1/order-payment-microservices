@@ -25,6 +25,12 @@ services:
     volumes:
       - payment-data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -57,19 +63,40 @@ services:
     depends_on:
       - order-db
       - payment-service
+      - redis
     environment:
       REST_PORT: 8080
       PAYMENT_SERVICE_ADDR: payment-service:50052
+
       DB_HOST: order-db
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: password
       DB_NAME: orderdb
 
+      REDIS_ADDR: redis:6379
+      CACHE_TTL: 5m
+
+      RATE_LIMIT: 10
+      RATE_WINDOW: 60
+
   notification-service:
     build: ./notification-service
+
     depends_on:
       - rabbitmq
+      - redis
+
+    environment:
+      REDIS_ADDR: redis:6379
+
+      PROVIDER_MODE: SIMULATED
+
+      MAX_RETRIES: 3
+
+      INITIAL_BACKOFF: 2
+
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
 
 volumes:
   order-data:
